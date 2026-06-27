@@ -26,8 +26,8 @@
   <numberAllowedLength>Variable</numberAllowedLength>
   <checkUnique>true</checkUnique>
   <autonumbering>true</autonumbering>
-  <registerRecords>InformationRegister.кфк_т_ТестовыйРегистрСведенийПР</registerRecords>
   <registerRecords>AccumulationRegister.кфк_т_ТестовыйРегистрНакопления</registerRecords>
+  <registerRecords>InformationRegister.кфк_т_ТестовыйРегистрСведенийПР</registerRecords>
   <postInPrivilegedMode>true</postInPrivilegedMode>
   <unpostInPrivilegedMode>true</unpostInPrivilegedMode>
   <attributes uuid="3883e297-466a-4417-aaf9-409b072cb47b">

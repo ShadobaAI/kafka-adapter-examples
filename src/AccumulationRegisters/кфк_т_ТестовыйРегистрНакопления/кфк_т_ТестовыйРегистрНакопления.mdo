@@ -53,6 +53,7 @@
     <minValue xsi:type="core:UndefinedValue"/>
     <maxValue xsi:type="core:UndefinedValue"/>
     <fullTextSearch>Use</fullTextSearch>
+    <useInTotals>true</useInTotals>
   </dimensions>
   <forms uuid="d9b42258-e8ad-44d8-9ae7-30b06417e6b8">
     <name>ФормаСписка</name>

@@ -10,8 +10,6 @@
     <defaultRunMode>Checked</defaultRunMode>
     <usePurposes>Checked</usePurposes>
     <defaultLanguage>Checked</defaultLanguage>
-    <interfaceCompatibilityMode>Checked</interfaceCompatibilityMode>
-    <compatibilityMode>Checked</compatibilityMode>
   </extension>
   <containedObjects classId="9cd510cd-abfc-11d4-9434-004095e12fc7" objectId="f38bcfa8-e755-4de1-9012-3f4a16060148"/>
   <containedObjects classId="9fcd25a0-4822-11d4-9414-008048da11f9" objectId="bb26ba3d-0d26-4ffd-92d2-2196154d9a51"/>
@@ -31,8 +29,6 @@
   <version>9.9.9.9</version>
   <updateCatalogAddress>github.com/ShadobaAI/kafka-adapter</updateCatalogAddress>
   <defaultLanguage>Language.Русский</defaultLanguage>
-  <interfaceCompatibilityMode>TaxiEnableVersion8_2</interfaceCompatibilityMode>
-  <compatibilityMode>8.3.21</compatibilityMode>
   <languages uuid="cc43f879-4102-40db-8161-f67cdcf8a5c8">
     <name>Русский</name>
     <objectBelonging>Adopted</objectBelonging>
