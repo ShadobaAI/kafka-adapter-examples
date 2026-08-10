@@ -10,8 +10,6 @@ This repository contains a development-only 1C extension with Kafka Adapter API 
 
 ## Repository-Specific Rules
 
-- Use only `kfk_edt` for current-state queries, navigation, and every 1C change under `src/**`.
-- Do not route this project through `code-metadata-mcp`, `graph-metadata-mcp`, `conv_edt`, or `kfk-unit-edt`.
+- Use only the EDT-MCP instance named `kfk-edt` for current-state queries, navigation, platform documentation, diagnostics, and every 1C change under `src/**`.
 - Prefix new repository-owned 1C metadata objects with `кфк_т_`.
 - Run the relevant adapter scenarios when the changed example is covered and the environment is available.
-
