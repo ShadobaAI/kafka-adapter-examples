@@ -1,11 +1,6 @@
 <package xmlns="http://v8.1c.ru/8.1/xdto" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="http://v8.fsk.ru/kfk/test/1.0" elementFormQualified="true" attributeFormQualified="false">
-	<valueType name="UUID" base="xs:string" variety="Atomic">
+	<valueType name="UUID" base="xs:string" variety="Atomic" length="36">
 		<pattern>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}</pattern>
-	</valueType>
-	<valueType name="TestCatalog.Enum" base="xs:string" variety="Atomic">
-		<enumeration>Значение1</enumeration>
-		<enumeration>Значение2</enumeration>
-		<enumeration>Значение3</enumeration>
 	</valueType>
 	<objectType name="TestAccumulationRegister">
 		<property name="period" type="xs:dateTime"/>
@@ -19,9 +14,15 @@
 		<property name="dateTime" type="xs:dateTime" nillable="true"/>
 		<property name="number" type="xs:decimal" nillable="true"/>
 		<property name="boolean" type="xs:boolean" nillable="true"/>
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="enum" type="d3p1:TestCatalog.Enum" nillable="true"/>
+		<property name="enum" nillable="true">
+			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic">
+				<enumeration>Значение1</enumeration>
+				<enumeration>Значение2</enumeration>
+				<enumeration>Значение3</enumeration>
+			</typeDef>
+		</property>
 		<property name="comment" type="xs:string" nillable="true"/>
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="tabularSection" type="d3p1:TestCatalog.TabularSection" lowerBound="0"/>
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="tabularSection" type="d3p1:TestCatalog.TabularSection" nillable="true"/>
 	</objectType>
 	<objectType name="TestCatalog.TabularSection">
 		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="row" type="d3p1:TestCatalog.TabularSection.Row" lowerBound="0" upperBound="-1"/>
