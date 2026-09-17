@@ -45,7 +45,7 @@
 		</property>
 		<property name="comment" type="xs:string" nillable="true"/>
 	</objectType>
-	<objectType name="TestRegisterRs">
+	<objectType name="TestRegisterRS">
 		<property name="period" type="xs:dateTime"/>
 		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="recorder" type="d3p1:UUID"/>
 		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="id" type="d3p1:UUID"/>
