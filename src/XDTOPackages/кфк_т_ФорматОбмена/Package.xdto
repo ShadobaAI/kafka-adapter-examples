@@ -2,53 +2,76 @@
 	<valueType name="UUID" base="xs:string" variety="Atomic" length="36">
 		<pattern>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}</pattern>
 	</valueType>
-	<objectType name="TestAccumulationRegister">
-		<property name="period" type="xs:dateTime"/>
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="recorder" type="d3p1:UUID"/>
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="id" type="d3p1:UUID"/>
-		<property name="value" type="xs:decimal" nillable="true"/>
-	</objectType>
-	<objectType name="TestCatalog">
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="ref" type="d3p1:UUID"/>
-		<property name="name" type="xs:string"/>
-		<property name="dateTime" type="xs:dateTime" nillable="true"/>
-		<property name="number" type="xs:decimal" nillable="true"/>
-		<property name="boolean" type="xs:boolean" nillable="true"/>
-		<property name="enum" nillable="true">
-			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic">
-				<enumeration>Значение1</enumeration>
-				<enumeration>Значение2</enumeration>
-				<enumeration>Значение3</enumeration>
-			</typeDef>
+	<valueType name="TestEnumerations" base="xs:string" variety="Atomic">
+		<enumeration>Значение1</enumeration>
+		<enumeration>Значение2</enumeration>
+		<enumeration>Значение3</enumeration>
+	</valueType>
+	<objectType name="TestAccumulationRegisters">
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="document" type="d3p1:UUID" nillable="true"/>
+		<property name="identifier" nillable="true">
+			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" maxLength="36"/>
 		</property>
-		<property name="comment" type="xs:string" nillable="true"/>
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="tabularSection" type="d3p1:TestCatalog.TabularSection" nillable="true"/>
+		<property name="isActive" type="xs:boolean" nillable="true"/>
+		<property name="period" type="xs:dateTime" nillable="true"/>
+		<property name="value" type="xs:double" nillable="true"/>
 	</objectType>
-	<objectType name="TestCatalog.TabularSection">
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="row" type="d3p1:TestCatalog.TabularSection.Row" lowerBound="0" upperBound="-1"/>
-	</objectType>
-	<objectType name="TestCatalog.TabularSection.Row">
+	<objectType name="TestCatalogs">
+		<property name="comment" nillable="true">
+			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" maxLength="256"/>
+		</property>
 		<property name="dateTime" type="xs:dateTime" nillable="true"/>
-		<property name="string" type="xs:string" nillable="true"/>
+		<property name="deleted" type="xs:boolean" nillable="true"/>
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="enumeration" type="d3p1:TestEnumerations" nillable="true"/>
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="id" type="d3p1:UUID" nillable="true"/>
+		<property name="isEnabled" type="xs:boolean" nillable="true"/>
+		<property name="name" nillable="true">
+			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" maxLength="100"/>
+		</property>
+		<property name="number" type="xs:double" nillable="true"/>
+		<property name="predefinedDataName" type="xs:string" nillable="true"/>
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="tableRows" type="d3p1:TestCatalogs.TableRows" nillable="true"/>
 	</objectType>
-	<objectType name="TestRegister">
-		<property name="period" type="xs:dateTime"/>
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="testRef" type="d3p1:UUID" nillable="true"/>
-		<property name="boolean" type="xs:boolean" nillable="true"/>
+	<objectType name="TestCatalogs.TableRows">
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="row" type="d3p1:TestCatalogs.TableRows.Row" lowerBound="0" upperBound="-1"/>
+	</objectType>
+	<objectType name="TestCatalogs.TableRows.Row">
+		<property name="dateTime" type="xs:dateTime" nillable="true"/>
+		<property name="string" nillable="true">
+			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" maxLength="150"/>
+		</property>
+	</objectType>
+	<objectType name="TestDocuments">
+		<property name="comment" type="xs:string" nillable="true"/>
+		<property name="conducted" type="xs:boolean" nillable="true"/>
+		<property name="date" type="xs:dateTime" nillable="true"/>
+		<property name="deleted" type="xs:boolean" nillable="true"/>
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="id" type="d3p1:UUID" nillable="true"/>
+		<property name="number" nillable="true">
+			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" maxLength="9"/>
+		</property>
+	</objectType>
+	<objectType name="TestInformationRegisters">
+		<property name="comment" nillable="true">
+			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" maxLength="256"/>
+		</property>
+		<property name="dateTime" type="xs:dateTime" nillable="true"/>
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="identifierId" type="d3p1:UUID" nillable="true"/>
+		<property name="isBoolean" type="xs:boolean" nillable="true"/>
+		<property name="number" type="xs:double" nillable="true"/>
+		<property name="period" type="xs:dateTime" nillable="true"/>
 		<property name="string" nillable="true">
 			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" maxLength="50"/>
 		</property>
-		<property name="number" type="xs:decimal" nillable="true"/>
-		<property name="dateTime" type="xs:dateTime" nillable="true"/>
-		<property name="uuid" nillable="true">
-			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" minLength="36" maxLength="36"/>
-		</property>
-		<property name="comment" type="xs:string" nillable="true"/>
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="testReferenceId" type="d3p1:UUID" nillable="true"/>
 	</objectType>
-	<objectType name="TestRegisterRS">
-		<property name="period" type="xs:dateTime"/>
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="recorder" type="d3p1:UUID"/>
-		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="id" type="d3p1:UUID"/>
-		<property name="value" type="xs:decimal" nillable="true"/>
+	<objectType name="TestInformationRegistersPR">
+		<property xmlns:d3p1="http://v8.fsk.ru/kfk/test/1.0" name="document" type="d3p1:UUID" nillable="true"/>
+		<property name="identifier" nillable="true">
+			<typeDef xsi:type="ValueType" base="xs:string" variety="Atomic" maxLength="36"/>
+		</property>
+		<property name="isActive" type="xs:boolean" nillable="true"/>
+		<property name="period" type="xs:dateTime" nillable="true"/>
+		<property name="value" type="xs:double" nillable="true"/>
 	</objectType>
 </package>
