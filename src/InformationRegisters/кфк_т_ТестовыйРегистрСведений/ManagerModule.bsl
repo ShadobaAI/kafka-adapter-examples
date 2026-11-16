@@ -47,6 +47,8 @@
 // ТестоваяСсылка в справочнике должен быть хотя бы один элемент.
 // Период записей определяется по времени SQL Server при выполнении скрипта.
 // Измерение Строка содержит префикс SQL- для отличия созданных записей.
+// Данные записываются порциями; завершенные порции сохраняются при последующей ошибке.
+// Прогресс выводится в сообщения SQL Server.
 //
 // Параметры:
 //  Количество - Число - целое количество создаваемых записей от 0 до 2147483647.
@@ -97,62 +99,115 @@
 	КонецЦикла;
 
 	ТекстСкрипта =
-	"SET NOCOUNT ON;
+	"-- Завершенные порции сохраняются при ошибке последующей порции.
+	|-- При отмене проверьте @@TRANCOUNT и при необходимости выполните ROLLBACK.
+	|SET NOCOUNT ON;
 	|IF @@TRANCOUNT <> 0
 	|    THROW 50000, N'Скрипт должен выполняться вне существующей транзакции.', 1;
 	|
 	|DECLARE @Count int = {{Количество}};
-	|DECLARE @Refs TABLE (Number int IDENTITY(1, 1) PRIMARY KEY, Ref binary(16) NOT NULL);
+	|IF @Count < 0
+	|    THROW 50000, N'Количество должно быть неотрицательным.', 1;
+	|IF @Count = 0
+	|BEGIN
+	|    RAISERROR(N'[####################] 100%% (0 / 0)', 0, 1) WITH NOWAIT;
+	|    RETURN;
+	|END;
+	|
+	|DECLARE @BatchSize int = 50000;
+	|DECLARE @Done int = 0, @BatchCount int, @Percent int;
+	|DECLARE @BarDone nvarchar(20), @BarLeft nvarchar(20), @DoneText varchar(24);
+	|DECLARE @CountText varchar(24) =
+	|    REPLACE(REPLACE(CONVERT(varchar(24), CONVERT(money, @Count), 1), '.00', ''), ',', ' ');
+	|RAISERROR(N'[--------------------] 0%% (0 / %s)', 0, 1, @CountText) WITH NOWAIT;
+	|DECLARE @Refs TABLE (Number int PRIMARY KEY, Ref binary(16) NOT NULL);
+	|DECLARE @LastRef binary(16) = NULL, @RefCount int;
+	|DECLARE @Period datetime2(0) = DATEADD(year, 2000, CONVERT(datetime2(0), SYSDATETIME()));
 	|
 	|BEGIN TRY
-	|    BEGIN TRANSACTION;
+	|    WHILE @Done < @Count
+	|    BEGIN
+	|        SET @BatchCount = CASE WHEN @Count - @Done < @BatchSize
+	|            THEN @Count - @Done ELSE @BatchSize END;
 	|
-	|    INSERT INTO @Refs (Ref)
-	|    SELECT TOP (@Count) {{Справочник.Ссылка}} FROM dbo.{{Справочник}};
-	|    DECLARE @RefCount int = @@ROWCOUNT;
-	|    IF @Count > 0 AND @RefCount = 0
-	|        THROW 50000, N'Тестовый справочник не содержит элементов.', 1;
+	|        BEGIN TRANSACTION;
+	|        DELETE FROM @Refs;
 	|
-	|    -- Даты 1С в SQL Server хранятся со сдвигом на 2000 лет.
-	|    DECLARE @Period datetime2(0) = DATEADD(year, 2000, CONVERT(datetime2(0), SYSDATETIME()));
+	|        -- Если до конца справочника не хватило ссылок, дополняем порцию с начала.
+	|        INSERT INTO @Refs (Number, Ref)
+	|        SELECT TOP (@BatchCount)
+	|            CONVERT(int, ROW_NUMBER() OVER (ORDER BY c.{{Справочник.Ссылка}})),
+	|            c.{{Справочник.Ссылка}}
+	|        FROM dbo.{{Справочник}} AS c
+	|        WHERE @LastRef IS NULL OR c.{{Справочник.Ссылка}} > @LastRef
+	|        ORDER BY c.{{Справочник.Ссылка}}
+	|        OPTION (RECOMPILE);
+	|        SET @RefCount = @@ROWCOUNT;
 	|
-	|    WITH Digits(n) AS
-	|    (
-	|        SELECT n FROM (VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)) AS d(n)
-	|    ),
-	|    Numbers(n) AS
-	|    (
-	|        SELECT 1 FROM Digits AS a CROSS JOIN Digits AS b CROSS JOIN Digits AS c CROSS JOIN Digits AS d
-	|    ),
-	|    RowsToInsert(Number) AS
-	|    (
-	|        SELECT TOP (@Count) ROW_NUMBER() OVER (ORDER BY (SELECT NULL))
-	|        FROM Numbers AS a CROSS JOIN Numbers AS b CROSS JOIN Digits AS c CROSS JOIN Digits AS d
-	|    )
-	|    INSERT INTO dbo.{{Регистр}}
-	|    (
-	|        {{Регистр.Период}}, {{Регистр.ТестоваяСсылка}}, {{Регистр.Булево}},
-	|        {{Регистр.Строка}}, {{Регистр.Число}}, {{Регистр.ДатаИВремя}},
-	|        {{Регистр.Идентификатор}}, {{Регистр.Комментарий}}
-	|    )
-	|    SELECT @Period, r.Ref,
-	|        CONVERT(binary(1), ABS(CHECKSUM(NEWID()) % 2)),
-	|        N'SQL-' + REPLACE(REPLACE(CONVERT(nvarchar(46), CRYPT_GEN_RANDOM(23), 2), N'A', N'А'), N'B', N'б'),
-	|        CONVERT(bigint, CHECKSUM(NEWID())) + 2147483648
-	|            + ABS(CHECKSUM(NEWID()) % 10001) / 10000.0,
-	|        DATEADD(second, ABS(CHECKSUM(NEWID()) % 86400),
-	|            DATEADD(day,
-	|                ABS(CHECKSUM(NEWID()) % DATEDIFF(day, DATEFROMPARTS(2001, 1, 1),
-	|                    DATEFROMPARTS(6000, 1, 1))),
-	|                DATETIME2FROMPARTS(2001, 1, 1, 0, 0, 0, 0, 0))),
-	|        CONVERT(binary(16), NEWID()),
-	|        REPLACE(REPLACE(CONVERT(nvarchar(256), CRYPT_GEN_RANDOM(128), 2), N'A', N'А'), N'B', N'б')
-	|    FROM RowsToInsert AS n
-	|    INNER JOIN @Refs AS r ON r.Number = CONVERT(int, (n.Number - 1) % NULLIF(@RefCount, 0)) + 1;
+	|        IF @RefCount < @BatchCount AND @LastRef IS NOT NULL
+	|        BEGIN
+	|            INSERT INTO @Refs (Number, Ref)
+	|            SELECT TOP (@BatchCount - @RefCount)
+	|                @RefCount + CONVERT(int, ROW_NUMBER() OVER (ORDER BY c.{{Справочник.Ссылка}})),
+	|                c.{{Справочник.Ссылка}}
+	|            FROM dbo.{{Справочник}} AS c
+	|            WHERE c.{{Справочник.Ссылка}} <= @LastRef
+	|            ORDER BY c.{{Справочник.Ссылка}}
+	|            OPTION (RECOMPILE);
+	|            SET @RefCount = @RefCount + @@ROWCOUNT;
+	|        END;
 	|
-	|    COMMIT TRANSACTION;
-	|    -- При IMPLICIT_TRANSACTIONS ON команда BEGIN TRANSACTION открывает два уровня.
-	|    IF @@TRANCOUNT > 0 COMMIT TRANSACTION;
+	|        IF @RefCount = 0
+	|            THROW 50000, N'Тестовый справочник не содержит элементов.', 1;
+	|
+	|        SELECT TOP (1) @LastRef = Ref FROM @Refs ORDER BY Number DESC;
+	|
+	|        WITH Digits(n) AS
+	|        (
+	|            SELECT n FROM (VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)) AS d(n)
+	|        ),
+	|        Numbers(n) AS
+	|        (
+	|            SELECT 1 FROM Digits AS a CROSS JOIN Digits AS b CROSS JOIN Digits AS c CROSS JOIN Digits AS d
+	|        ),
+	|        RowsToInsert(Number) AS
+	|        (
+	|            SELECT TOP (@BatchCount) ROW_NUMBER() OVER (ORDER BY (SELECT NULL))
+	|            FROM Numbers AS a CROSS JOIN Numbers AS b CROSS JOIN Digits AS c CROSS JOIN Digits AS d
+	|        )
+	|        INSERT INTO dbo.{{Регистр}}
+	|        (
+	|            {{Регистр.Период}}, {{Регистр.ТестоваяСсылка}}, {{Регистр.Булево}},
+	|            {{Регистр.Строка}}, {{Регистр.Число}}, {{Регистр.ДатаИВремя}},
+	|            {{Регистр.Идентификатор}}, {{Регистр.Комментарий}}
+	|        )
+	|        SELECT @Period, r.Ref,
+	|            CONVERT(binary(1), ABS(CHECKSUM(NEWID()) % 2)),
+	|            N'SQL-' + REPLACE(REPLACE(CONVERT(nvarchar(46), CRYPT_GEN_RANDOM(23), 2), N'A', N'А'), N'B', N'б'),
+	|            CONVERT(bigint, CHECKSUM(NEWID())) + 2147483648
+	|                + ABS(CHECKSUM(NEWID()) % 10001) / 10000.0,
+	|            DATEADD(second, ABS(CHECKSUM(NEWID()) % 86400),
+	|                DATEADD(day,
+	|                    ABS(CHECKSUM(NEWID()) % DATEDIFF(day, DATEFROMPARTS(2001, 1, 1),
+	|                        DATEFROMPARTS(6000, 1, 1))),
+	|                    DATETIME2FROMPARTS(2001, 1, 1, 0, 0, 0, 0, 0))),
+	|            CONVERT(binary(16), NEWID()),
+	|            REPLACE(REPLACE(CONVERT(nvarchar(256), CRYPT_GEN_RANDOM(128), 2), N'A', N'А'), N'B', N'б')
+	|        FROM RowsToInsert AS n
+	|        INNER JOIN @Refs AS r ON r.Number = CONVERT(int, (n.Number - 1) % NULLIF(@RefCount, 0)) + 1;
+	|
+	|        COMMIT TRANSACTION;
+	|        -- При IMPLICIT_TRANSACTIONS ON открываются два уровня транзакции.
+	|        IF @@TRANCOUNT > 0 COMMIT TRANSACTION;
+	|
+	|        SET @Done = @Done + @BatchCount;
+	|        SET @Percent = CONVERT(int, CONVERT(bigint, @Done) * 100 / @Count);
+	|        SET @BarDone = REPLICATE(N'#', @Percent / 5);
+	|        SET @BarLeft = REPLICATE(N'-', 20 - @Percent / 5);
+	|        SET @DoneText = REPLACE(REPLACE(CONVERT(varchar(24), CONVERT(money, @Done), 1), '.00', ''), ',', ' ');
+	|        RAISERROR(N'[%s%s] %d%% (%s / %s)', 0, 1, @BarDone, @BarLeft, @Percent, @DoneText, @CountText)
+	|            WITH NOWAIT;
+	|    END;
 	|END TRY
 	|BEGIN CATCH
 	|    IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;

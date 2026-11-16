@@ -42,6 +42,8 @@
 // Имена таблиц и полей получаются из текущей структуры хранения информационной базы.
 // Скрипт формируется для этой базы и записывает данные напрямую, минуя обработчики 1С.
 // Дата элементов определяется по времени SQL Server при выполнении скрипта.
+// Данные записываются порциями; завершенные порции сохраняются при последующей ошибке.
+// Прогресс выводится в сообщения SQL Server.
 //
 // Параметры:
 //  Количество - Число - целое количество создаваемых элементов от 0 до 2147483647.
@@ -99,11 +101,30 @@
 	КонецЦикла;
 
 	ТекстСкрипта =
-	"SET NOCOUNT ON;
+	"-- Завершенные порции сохраняются при ошибке последующей порции.
+	|-- При отмене проверьте @@TRANCOUNT и при необходимости выполните ROLLBACK.
+	|SET NOCOUNT ON;
 	|IF @@TRANCOUNT <> 0
 	|    THROW 50000, N'Скрипт должен выполняться вне существующей транзакции.', 1;
 	|
 	|DECLARE @Count int = {{Количество}};
+	|IF @Count < 0
+	|    THROW 50000, N'Количество должно быть неотрицательным.', 1;
+	|IF @Count = 0
+	|BEGIN
+	|    RAISERROR(N'[####################] 100%% (0 / 0)', 0, 1) WITH NOWAIT;
+	|    RETURN;
+	|END;
+	|
+	|DECLARE @BatchSize int = 10000;
+	|DECLARE @Done int = 0, @BatchCount int, @Percent int;
+	|DECLARE @BarDone nvarchar(20), @BarLeft nvarchar(20), @DoneText varchar(24);
+	|DECLARE @CountText varchar(24) =
+	|    REPLACE(REPLACE(CONVERT(varchar(24), CONVERT(money, @Count), 1), '.00', ''), ',', ' ');
+	|RAISERROR(N'[--------------------] 0%% (0 / %s)', 0, 1, @CountText) WITH NOWAIT;
+	|-- Последовательные ссылки уменьшают случайный доступ к страницам индекса.
+	|DECLARE @RunPrefix binary(12) = SUBSTRING(CONVERT(binary(16), NEWID()), 1, 12);
+	|DECLARE @NamePrefix nvarchar(16) = N'SQL-' + CONVERT(nvarchar(12), SUBSTRING(@RunPrefix, 1, 6), 2);
 	|DECLARE @Enums TABLE (Number int IDENTITY(1, 1) PRIMARY KEY, Ref binary(16) NOT NULL);
 	|DECLARE @Refs TABLE
 	|(
@@ -114,66 +135,87 @@
 	|
 	|BEGIN TRY
 	|    BEGIN TRANSACTION;
-	|
 	|    INSERT INTO @Enums (Ref)
 	|    SELECT {{Перечисление.Ссылка}} FROM dbo.{{Перечисление}};
 	|    DECLARE @EnumCount int = @@ROWCOUNT;
-	|    IF @Count > 0 AND @EnumCount = 0
+	|    IF @EnumCount = 0
 	|        THROW 50000, N'Тестовое перечисление не содержит значений.', 1;
-	|
-	|    WITH Digits(n) AS
-	|    (
-	|        SELECT n FROM (VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)) AS d(n)
-	|    ),
-	|    Numbers(n) AS
-	|    (
-	|        SELECT 1 FROM Digits AS a CROSS JOIN Digits AS b CROSS JOIN Digits AS c CROSS JOIN Digits AS d
-	|    )
-	|    INSERT INTO @Refs (Ref, LineCount, EnumNumber)
-	|    SELECT TOP (@Count) CONVERT(binary(16), NEWID()),
-	|        ABS(CHECKSUM(NEWID()) % 11),
-	|        ABS(CHECKSUM(NEWID()) % NULLIF(@EnumCount, 0)) + 1
-	|    FROM Numbers AS a CROSS JOIN Numbers AS b CROSS JOIN Digits AS c CROSS JOIN Digits AS d;
-	|
-	|    -- Дата 1С хранится со сдвигом на 2000 лет.
-	|    INSERT INTO dbo.{{Справочник}}
-	|    (
-	|        {{Справочник.Ссылка}}, {{Справочник.ПометкаУдаления}},
-	|        {{Справочник.ИмяПредопределенныхДанных}}, {{Справочник.Наименование}},
-	|        {{Справочник.ДатаИВремя}}, {{Справочник.Число}}, {{Справочник.Булево}},
-	|        {{Справочник.Перечисление}}, {{Справочник.Комментарий}}
-	|    )
-	|    SELECT r.Ref, 0x00, 0x00000000000000000000000000000000,
-	|        N'SQL-' + REPLACE(REPLACE(CONVERT(nvarchar(96), CRYPT_GEN_RANDOM(48), 2), N'A', N'А'), N'B', N'б'),
-	|        DATEADD(year, 2000, CONVERT(datetime2(0), SYSDATETIME())),
-	|        CONVERT(bigint, CHECKSUM(NEWID())) + 2147483648
-	|            + ABS(CHECKSUM(NEWID()) % 10001) / 10000.0,
-	|        CONVERT(binary(1), ABS(CHECKSUM(NEWID()) % 2)), e.Ref,
-	|        REPLACE(REPLACE(CONVERT(nvarchar(256), CRYPT_GEN_RANDOM(128), 2), N'A', N'А'), N'B', N'б')
-	|    FROM @Refs AS r
-	|    INNER JOIN @Enums AS e ON e.Number = r.EnumNumber;
-	|
-	|    -- Внутренний ключ строки на единицу меньше ее номера.
-	|    INSERT INTO dbo.{{ТабличнаяЧасть}}
-	|    (
-	|        {{ТабличнаяЧасть.Ссылка}}, {{ТабличнаяЧасть.КлючСтроки}},
-	|        {{ТабличнаяЧасть.НомерСтроки}}, {{ТабличнаяЧасть.ДатаИВремя}},
-	|        {{ТабличнаяЧасть.Строка}}
-	|    )
-	|    SELECT r.Ref, CONVERT(binary(4), n.Number - 1), n.Number,
-	|        DATEADD(second, ABS(CHECKSUM(NEWID()) % 86400),
-	|            DATEADD(day,
-	|                ABS(CHECKSUM(NEWID()) % DATEDIFF(day, DATEFROMPARTS(2001, 1, 1),
-	|                    DATEFROMPARTS(6000, 1, 1))),
-	|                DATETIME2FROMPARTS(2001, 1, 1, 0, 0, 0, 0, 0))),
-	|        REPLACE(REPLACE(CONVERT(nvarchar(150), CRYPT_GEN_RANDOM(75), 2), N'A', N'А'), N'B', N'б')
-	|    FROM @Refs AS r
-	|    CROSS JOIN (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)) AS n(Number)
-	|    WHERE n.Number <= r.LineCount;
-	|
 	|    COMMIT TRANSACTION;
-	|    -- При IMPLICIT_TRANSACTIONS ON команда BEGIN TRANSACTION открывает два уровня.
 	|    IF @@TRANCOUNT > 0 COMMIT TRANSACTION;
+	|
+	|    WHILE @Done < @Count
+	|    BEGIN
+	|        SET @BatchCount = CASE WHEN @Count - @Done < @BatchSize
+	|            THEN @Count - @Done ELSE @BatchSize END;
+	|
+	|        BEGIN TRANSACTION;
+	|        DELETE FROM @Refs;
+	|
+	|        WITH Digits(n) AS
+	|        (
+	|            SELECT n FROM (VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)) AS d(n)
+	|        ),
+	|        Numbers(n) AS
+	|        (
+	|            SELECT 1 FROM Digits AS a CROSS JOIN Digits AS b CROSS JOIN Digits AS c CROSS JOIN Digits AS d
+	|        )
+	|        INSERT INTO @Refs (Ref, LineCount, EnumNumber)
+	|        SELECT TOP (@BatchCount)
+	|            CONVERT(binary(16), @RunPrefix
+	|                + CONVERT(binary(4), @Done + ROW_NUMBER() OVER (ORDER BY (SELECT NULL)))),
+	|            ABS(CHECKSUM(NEWID()) % 11),
+	|            ABS(CHECKSUM(NEWID()) % NULLIF(@EnumCount, 0)) + 1
+	|        FROM Numbers AS a CROSS JOIN Numbers AS b CROSS JOIN Digits AS c CROSS JOIN Digits AS d;
+	|
+	|        -- Дата 1С хранится со сдвигом на 2000 лет.
+	|        INSERT INTO dbo.{{Справочник}}
+	|        (
+	|            {{Справочник.Ссылка}}, {{Справочник.ПометкаУдаления}},
+	|            {{Справочник.ИмяПредопределенныхДанных}}, {{Справочник.Наименование}},
+	|            {{Справочник.ДатаИВремя}}, {{Справочник.Число}}, {{Справочник.Булево}},
+	|            {{Справочник.Перечисление}}, {{Справочник.Комментарий}}
+	|        )
+	|        SELECT r.Ref, 0x00, 0x00000000000000000000000000000000,
+	|            @NamePrefix + CONVERT(nvarchar(8), SUBSTRING(r.Ref, 13, 4), 2)
+	|                + REPLACE(REPLACE(CONVERT(nvarchar(76), CRYPT_GEN_RANDOM(38), 2), N'A', N'А'), N'B', N'б'),
+	|            DATEADD(year, 2000, CONVERT(datetime2(0), SYSDATETIME())),
+	|            CONVERT(bigint, CHECKSUM(NEWID())) + 2147483648
+	|                + ABS(CHECKSUM(NEWID()) % 10001) / 10000.0,
+	|            CONVERT(binary(1), ABS(CHECKSUM(NEWID()) % 2)), e.Ref,
+	|            REPLACE(REPLACE(CONVERT(nvarchar(256), CRYPT_GEN_RANDOM(128), 2), N'A', N'А'), N'B', N'б')
+	|        FROM @Refs AS r
+	|        INNER JOIN @Enums AS e ON e.Number = r.EnumNumber;
+	|
+	|        -- Внутренний ключ строки на единицу меньше ее номера.
+	|        INSERT INTO dbo.{{ТабличнаяЧасть}}
+	|        (
+	|            {{ТабличнаяЧасть.Ссылка}}, {{ТабличнаяЧасть.КлючСтроки}},
+	|            {{ТабличнаяЧасть.НомерСтроки}}, {{ТабличнаяЧасть.ДатаИВремя}},
+	|            {{ТабличнаяЧасть.Строка}}
+	|        )
+	|        SELECT r.Ref, CONVERT(binary(4), n.Number - 1), n.Number,
+	|            DATEADD(second, ABS(CHECKSUM(NEWID()) % 86400),
+	|                DATEADD(day,
+	|                    ABS(CHECKSUM(NEWID()) % DATEDIFF(day, DATEFROMPARTS(2001, 1, 1),
+	|                        DATEFROMPARTS(6000, 1, 1))),
+	|                    DATETIME2FROMPARTS(2001, 1, 1, 0, 0, 0, 0, 0))),
+	|            REPLACE(REPLACE(CONVERT(nvarchar(150), CRYPT_GEN_RANDOM(75), 2), N'A', N'А'), N'B', N'б')
+	|        FROM @Refs AS r
+	|        CROSS JOIN (VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)) AS n(Number)
+	|        WHERE n.Number <= r.LineCount;
+	|
+	|        COMMIT TRANSACTION;
+	|        -- При IMPLICIT_TRANSACTIONS ON открываются два уровня транзакции.
+	|        IF @@TRANCOUNT > 0 COMMIT TRANSACTION;
+	|
+	|        SET @Done = @Done + @BatchCount;
+	|        SET @Percent = CONVERT(int, CONVERT(bigint, @Done) * 100 / @Count);
+	|        SET @BarDone = REPLICATE(N'#', @Percent / 5);
+	|        SET @BarLeft = REPLICATE(N'-', 20 - @Percent / 5);
+	|        SET @DoneText = REPLACE(REPLACE(CONVERT(varchar(24), CONVERT(money, @Done), 1), '.00', ''), ',', ' ');
+	|        RAISERROR(N'[%s%s] %d%% (%s / %s)', 0, 1, @BarDone, @BarLeft, @Percent, @DoneText, @CountText)
+	|            WITH NOWAIT;
+	|    END;
 	|END TRY
 	|BEGIN CATCH
 	|    IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
