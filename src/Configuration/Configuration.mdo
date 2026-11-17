@@ -42,6 +42,7 @@
   <commonModules>CommonModule.кфк_т_МенеджерОбменаЧерезУниверсальныйФормат</commonModules>
   <commonModules>CommonModule.кфк_т_ТестовыеДанные</commonModules>
   <commonModules>CommonModule.ОбновлениеИнформационнойБазыKafka</commonModules>
+  <commonModules>CommonModule.ОбщегоНазначенияПереопределяемый</commonModules>
   <commonModules>CommonModule.ПодключаемыеКомандыПереопределяемый</commonModules>
   <commonModules>CommonModule.РегламентныеЗаданияПереопределяемый</commonModules>
   <xDTOPackages>XDTOPackage.кфк_т_ФорматОбмена</xDTOPackages>
